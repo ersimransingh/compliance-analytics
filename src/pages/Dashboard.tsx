@@ -25,16 +25,19 @@ interface UserAnalytics {
 }
 
 type TabType = 'all' | 'success' | 'failed';
+type DateRangeType = 'week' | 'month' | 'all';
 
 const Dashboard: React.FC = () => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [analyticsData, setAnalyticsData] = useState<UserAnalytics[]>([]);
+  const [allApiCalls, setAllApiCalls] = useState<ApiCall[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [selectedUserFilter, setSelectedUserFilter] = useState<string>('all');
   const [expandedApi, setExpandedApi] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
+  const [dateRange, setDateRange] = useState<DateRangeType>('week');
+  const [currentWeekStart, setCurrentWeekStart] = useState<moment.Moment>(moment().startOf('week'));
 
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
@@ -67,14 +70,14 @@ const Dashboard: React.FC = () => {
 
       console.log(`📊 Found ${apiSnapshot.size} users in Api collection`);
 
+      const allCalls: ApiCall[] = [];
+
       // If empty, try the known user directly
       if (apiSnapshot.empty || apiSnapshot.size === 0) {
         console.warn('⚠️ Api collection appears empty. Trying direct access to known user...');
 
         const testUserId = 'rahuldhakate2512@gmail.com';
         console.log(`Attempting to fetch data for: ${testUserId}`);
-
-        const allUserAnalytics: UserAnalytics[] = [];
 
         try {
           // Fetch failed API calls for known user
@@ -83,11 +86,10 @@ const Dashboard: React.FC = () => {
           const failedSnapshot = await getDocs(failedRef);
           console.log('Failed snapshot size:', failedSnapshot.size);
 
-          const failedCalls: ApiCall[] = [];
           failedSnapshot.forEach((doc) => {
             const data = doc.data();
             console.log('Failed doc:', doc.id, data);
-            failedCalls.push({
+            allCalls.push({
               id: doc.id,
               url: data.url || data.response?.data?.url || 'Unknown',
               status: data.response?.data?.status || data.status,
@@ -105,11 +107,10 @@ const Dashboard: React.FC = () => {
           const successSnapshot = await getDocs(successRef);
           console.log('Success snapshot size:', successSnapshot.size);
 
-          const successCalls: ApiCall[] = [];
           successSnapshot.forEach((doc) => {
             const data = doc.data();
             console.log('Success doc:', doc.id, data);
-            successCalls.push({
+            allCalls.push({
               id: doc.id,
               url: data.url || data.response?.data?.url || 'Unknown',
               status: data.response?.data?.status || data.status,
@@ -121,30 +122,12 @@ const Dashboard: React.FC = () => {
             });
           });
 
-          const totalCalls = failedCalls.length + successCalls.length;
-          const successRate = totalCalls > 0 ? (successCalls.length / totalCalls) * 100 : 0;
-
-          if (totalCalls > 0) {
-            allUserAnalytics.push({
-              userId: testUserId,
-              successCalls,
-              failedCalls,
-              totalCalls,
-              successRate
-            });
-          }
-
-          console.log(`  ✅ Success: ${successCalls.length}, ❌ Failed: ${failedCalls.length}`);
+          console.log(`  ✅ Success: ${allCalls.filter(c => c.type === 'success').length}, ❌ Failed: ${allCalls.filter(c => c.type === 'failed').length}`);
         } catch (directError) {
           console.error('Error with direct access:', directError);
         }
-
-        setAnalyticsData(allUserAnalytics);
-        console.log('✅ Analytics data loaded (direct access):', allUserAnalytics);
       } else {
         // Process all users normally
-        const allUserAnalytics: UserAnalytics[] = [];
-
         for (const userDoc of apiSnapshot.docs) {
           const userId = userDoc.id;
           console.log(`👤 Processing user: ${userId}`);
@@ -152,13 +135,12 @@ const Dashboard: React.FC = () => {
           // Fetch failed API calls
           const failedRef = collection(db, 'Api', userId, 'failed');
           const failedSnapshot = await getDocs(failedRef);
-          const failedCalls: ApiCall[] = [];
 
           console.log(`  Failed calls: ${failedSnapshot.size}`);
           failedSnapshot.forEach((doc) => {
             const data = doc.data();
             console.log('  Failed doc:', doc.id, data);
-            failedCalls.push({
+            allCalls.push({
               id: doc.id,
               url: data.url || data.response?.data?.url || 'Unknown',
               status: data.response?.data?.status || data.status,
@@ -173,13 +155,12 @@ const Dashboard: React.FC = () => {
           // Fetch success API calls
           const successRef = collection(db, 'Api', userId, 'success');
           const successSnapshot = await getDocs(successRef);
-          const successCalls: ApiCall[] = [];
 
           console.log(`  Success calls: ${successSnapshot.size}`);
           successSnapshot.forEach((doc) => {
             const data = doc.data();
             console.log('  Success doc:', doc.id, data);
-            successCalls.push({
+            allCalls.push({
               id: doc.id,
               url: data.url || data.response?.data?.url || 'Unknown',
               status: data.response?.data?.status || data.status,
@@ -191,23 +172,12 @@ const Dashboard: React.FC = () => {
             });
           });
 
-          const totalCalls = failedCalls.length + successCalls.length;
-          const successRate = totalCalls > 0 ? (successCalls.length / totalCalls) * 100 : 0;
-
-          allUserAnalytics.push({
-            userId,
-            successCalls,
-            failedCalls,
-            totalCalls,
-            successRate
-          });
-
-          console.log(`  ✅ Success: ${successCalls.length}, ❌ Failed: ${failedCalls.length}`);
+          console.log(`  ✅ Success: ${allCalls.filter(c => c.userId === userId && c.type === 'success').length}, ❌ Failed: ${allCalls.filter(c => c.userId === userId && c.type === 'failed').length}`);
         }
-
-        setAnalyticsData(allUserAnalytics);
-        console.log('✅ Analytics data loaded:', allUserAnalytics);
       }
+
+      setAllApiCalls(allCalls);
+      console.log('✅ Total API calls loaded:', allCalls.length);
     } catch (error) {
       console.error('❌ Error fetching analytics:', error);
       console.error('Error details:', error);
@@ -215,7 +185,6 @@ const Dashboard: React.FC = () => {
       setLoading(false);
     }
   };
-
 
   if (loading) {
     return (
@@ -228,21 +197,75 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  // Calculate date range
+  let startDate: moment.Moment | null = null;
+  let endDate: moment.Moment | null = null;
+
+  if (dateRange === 'week') {
+    startDate = currentWeekStart.clone();
+    endDate = currentWeekStart.clone().endOf('week');
+  } else if (dateRange === 'month') {
+    startDate = moment().startOf('month');
+    endDate = moment().endOf('month');
+  }
+
+  // Filter by date range
+  let filteredByDate = allApiCalls;
+  if (startDate && endDate) {
+    filteredByDate = allApiCalls.filter(call => {
+      const callDate = moment(call.timestamp);
+      return callDate.isBetween(startDate, endDate, 'day', '[]');
+    });
+  }
+
+  // Calculate analytics from filtered data
+  const calculateAnalytics = (calls: ApiCall[]) => {
+    const userMap = new Map<string, UserAnalytics>();
+
+    calls.forEach(call => {
+      if (!userMap.has(call.userId)) {
+        userMap.set(call.userId, {
+          userId: call.userId,
+          successCalls: [],
+          failedCalls: [],
+          totalCalls: 0,
+          successRate: 0
+        });
+      }
+
+      const userAnalytics = userMap.get(call.userId)!;
+      if (call.type === 'success') {
+        userAnalytics.successCalls.push(call);
+      } else {
+        userAnalytics.failedCalls.push(call);
+      }
+      userAnalytics.totalCalls++;
+    });
+
+    // Calculate success rates
+    userMap.forEach(analytics => {
+      analytics.successRate = analytics.totalCalls > 0
+        ? (analytics.successCalls.length / analytics.totalCalls) * 100
+        : 0;
+    });
+
+    return Array.from(userMap.values());
+  };
+
+  const dateFilteredAnalytics = calculateAnalytics(filteredByDate);
+
   // Calculate totals
-  const totalSuccess = analyticsData.reduce((sum, u) => sum + u.successCalls.length, 0);
-  const totalFailed = analyticsData.reduce((sum, u) => sum + u.failedCalls.length, 0);
-  const totalCalls = totalSuccess + totalFailed;
+  const totalSuccess = filteredByDate.filter(call => call.type === 'success').length;
+  const totalFailed = filteredByDate.filter(call => call.type === 'failed').length;
+  const totalCalls = filteredByDate.length;
   const overallSuccessRate = totalCalls > 0 ? (totalSuccess / totalCalls) * 100 : 0;
 
-  // Get all API calls
-  const allApiCalls: ApiCall[] = analyticsData.flatMap(u => [...u.successCalls, ...u.failedCalls]);
-
   // Filter by tab
-  let filteredByTab = allApiCalls;
+  let filteredByTab = filteredByDate;
   if (activeTab === 'success') {
-    filteredByTab = allApiCalls.filter(call => call.type === 'success');
+    filteredByTab = filteredByDate.filter(call => call.type === 'success');
   } else if (activeTab === 'failed') {
-    filteredByTab = allApiCalls.filter(call => call.type === 'failed');
+    filteredByTab = filteredByDate.filter(call => call.type === 'failed');
   }
 
   // Filter by user
@@ -266,17 +289,112 @@ const Dashboard: React.FC = () => {
     { name: 'Failed', value: totalFailed, color: '#ef4444' }
   ];
 
-  const userBarData = analyticsData.map(u => ({
+  const userBarData = dateFilteredAnalytics.map(u => ({
     name: u.userId.split('@')[0],
     success: u.successCalls.length,
     failed: u.failedCalls.length
   }));
 
   // Get unique users for filter dropdown
-  const uniqueUsers = Array.from(new Set(analyticsData.map(u => u.userId)));
+  const uniqueUsers = Array.from(new Set(dateFilteredAnalytics.map(u => u.userId)));
+
+  const handlePreviousWeek = () => {
+    setCurrentWeekStart(currentWeekStart.clone().subtract(1, 'week'));
+  };
+
+  const handleNextWeek = () => {
+    setCurrentWeekStart(currentWeekStart.clone().add(1, 'week'));
+  };
+
+  const handleToday = () => {
+    setCurrentWeekStart(moment().startOf('week'));
+  };
+
+  // Date range display
+  const dateRangeDisplay = dateRange === 'week'
+    ? `${startDate?.format('MMM DD')} - ${endDate?.format('MMM DD, YYYY')}`
+    : dateRange === 'month'
+    ? moment().format('MMMM YYYY')
+    : 'All Time';
 
   return (
     <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-screen-2xl">
+      {/* Date Range Selector */}
+       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-800">Time Period</h2>
+                    <p className="text-sm text-gray-600 mt-1">{dateRangeDisplay}</p>
+                  </div>
+      
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Date Range Buttons */}
+                    <div className="flex gap-2 bg-gray-100 rounded-lg p-1">
+                      <button
+                        onClick={() => setDateRange('week')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                          dateRange === 'week'
+                            ? 'bg-white text-indigo-600 shadow'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                      >
+                        Week
+                      </button>
+                      <button
+                        onClick={() => setDateRange('month')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                          dateRange === 'month'
+                            ? 'bg-white text-indigo-600 shadow'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                      >
+                        Month
+                      </button>
+                      <button
+                        onClick={() => setDateRange('all')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                          dateRange === 'all'
+                            ? 'bg-white text-indigo-600 shadow'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                      >
+                        All Time
+                      </button>
+                    </div>
+      
+                    {/* Week Navigation (only show when week is selected) */}
+                    {dateRange === 'week' && (
+                      <div className="flex items-center gap-2 border-l pl-3">
+                        <button
+                          onClick={handlePreviousWeek}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition"
+                          title="Previous Week"
+                        >
+                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={handleToday}
+                          className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                        >
+                          This Week
+                        </button>
+                        <button
+                          onClick={handleNextWeek}
+                          disabled={currentWeekStart.isSameOrAfter(moment().startOf('week'))}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Next Week"
+                        >
+                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
         {/* Overview Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-6">
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -349,7 +467,7 @@ const Dashboard: React.FC = () => {
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    label={({ name, percent }:any) => `${name}: ${(percent * 100).toFixed(0)}%`}
                     outerRadius={100}
                     fill="#8884d8"
                     dataKey="value"
