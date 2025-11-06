@@ -3,9 +3,14 @@ const { executeProcedure } = require('../services/procedureService');
 
 const extractApiMetadata = (req) => {
   if (req.method === 'GET') {
-    const projectName = req.query.projectName || req.query.ProjectName;
-    const moduleName = req.query.moduleName || req.query.ModuleName;
-    const functionName = req.query.functionName || req.query.FunctionName;
+    const {
+      projectName = req.query.ProjectName,
+      moduleName = req.query.ModuleName,
+      functionName = req.query.FunctionName,
+      ...restQuery
+    } = req.query;
+
+    const payloadFromQuery = Object.keys(restQuery).length ? restQuery : undefined;
 
     return {
       api: {
@@ -13,7 +18,7 @@ const extractApiMetadata = (req) => {
         ModuleName: moduleName,
         FunctionName: functionName,
       },
-      data: undefined,
+      payload: payloadFromQuery,
     };
   }
 
@@ -25,9 +30,12 @@ const extractApiMetadata = (req) => {
     throw new Error('Missing api metadata in request body.');
   }
 
+  const { api, ...rest } = req.body;
+  const payload = Object.keys(rest).length ? rest : undefined;
+
   return {
-    api: req.body.api,
-    data: req.body.data,
+    api,
+    payload,
   };
 };
 
@@ -69,7 +77,7 @@ const listApiDefinitions = async (req, res, next) => {
 
 const executeApiDefinition = async (req, res, next) => {
   try {
-    const { api, data } = extractApiMetadata(req);
+    const { api, payload } = extractApiMetadata(req);
     ensureApiKeys(api);
 
     const definition = await getActiveDefinition({
@@ -82,7 +90,7 @@ const executeApiDefinition = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Active API definition not found.' });
     }
 
-    const result = await executeProcedure(definition, data);
+    const result = await executeProcedure(definition, payload);
 
     return res.status(200).json({
       success: true,

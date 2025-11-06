@@ -1,22 +1,22 @@
 const { callStoredProcedure } = require('../config/database');
 const logger = require('../utils/logger');
 
-const normalizeDataPayload = (data) => {
-  if (!data) {
+const normalizePayload = (payload) => {
+  if (!payload) {
     return { keys: [], values: [] };
   }
 
-  if (Array.isArray(data)) {
+  if (Array.isArray(payload)) {
     return {
-      keys: data.map((_, index) => index.toString()),
-      values: data,
+      keys: payload.map((_, index) => index.toString()),
+      values: payload,
     };
   }
 
-  if (typeof data === 'object') {
+  if (typeof payload === 'object') {
     return {
       keys: ['payload'],
-      values: [data],
+      values: [payload],
     };
   }
 
@@ -40,8 +40,8 @@ const normalizeResultSets = (rows) => {
   return datasets;
 };
 
-const executeProcedure = async (apiDefinition, dataPayload) => {
-  const { values } = normalizeDataPayload(dataPayload);
+const executeProcedure = async (apiDefinition, rawPayload) => {
+  const { values } = normalizePayload(rawPayload);
   const sanitizedValues = values.map((value) => {
     if (value === null || value === undefined) {
       return null;
@@ -58,14 +58,28 @@ const executeProcedure = async (apiDefinition, dataPayload) => {
     return value;
   });
   const debugEnabled = apiDefinition.isDebugEnabled === 'Y';
-  logger.info('Prepared stored procedure payload.', {
+  const payloadMeta = {
     procedure: apiDefinition.procedureName,
     parameterCount: sanitizedValues.length,
     sanitizedValues,
-  });
-  const rows = await callStoredProcedure(apiDefinition.procedureName, sanitizedValues, debugEnabled);
+  };
+  logger.info('Prepared stored procedure payload.', payloadMeta);
+  try {
+    const rows = await callStoredProcedure(apiDefinition.procedureName, sanitizedValues, debugEnabled);
 
-  return normalizeResultSets(rows);
+    return normalizeResultSets(rows);
+  } catch (error) {
+    logger.error('Stored procedure execution failed.', {
+      ...payloadMeta,
+      error: error.message,
+    });
+    error.details = {
+      ...(error.details || {}),
+      procedure: apiDefinition.procedureName,
+      parameters: sanitizedValues,
+    };
+    throw error;
+  }
 };
 
 module.exports = {
