@@ -126,8 +126,8 @@ const Dashboard: React.FC = () => {
     startDate = currentWeekStart.clone();
     endDate = currentWeekStart.clone().endOf('week');
   } else if (dateRange === 'month') {
-    startDate = moment().startOf('month');
-    endDate = moment().endOf('month');
+    startDate = currentWeekStart.clone().startOf('month');
+    endDate = currentWeekStart.clone().endOf('month');
   }
 
   // Filter by date range
@@ -231,11 +231,24 @@ const Dashboard: React.FC = () => {
     setCurrentWeekStart(moment().startOf('week'));
   };
 
+  const handlePreviousMonth = () => {
+  setCurrentWeekStart(currentWeekStart.clone().subtract(1,'month'));
+  }
+
+  const handleNextMonth = () => {
+  setCurrentWeekStart(currentWeekStart.clone().add(1,'month'));
+  }
+  
+  const handleTodayMonth = () => {
+    setCurrentWeekStart(moment().startOf('month'))
+  }
+
+
   // Date range display
   const dateRangeDisplay = dateRange === 'week'
     ? `${startDate?.format('MMM DD')} - ${endDate?.format('MMM DD, YYYY')}`
     : dateRange === 'month'
-    ? moment().format('MMMM YYYY')
+    ? currentWeekStart.format('MMMM YYYY')
     : 'All Time';
 
   return (
@@ -283,7 +296,7 @@ const Dashboard: React.FC = () => {
                       </button>
                     </div>
       
-                    {/* Week Navigation (only show when week is selected) */}
+                    {/* Week Navigation  */}
                     {dateRange === 'week' && (
                       <div className="flex items-center gap-2 border-l pl-3">
                         <button
@@ -299,10 +312,40 @@ const Dashboard: React.FC = () => {
                           onClick={handleToday}
                           className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                         >
-                          This Week
+                          {dateRangeDisplay}
                         </button>
                         <button
                           onClick={handleNextWeek}
+                          disabled={currentWeekStart.isSameOrAfter(moment().startOf('week'))}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Next Week"
+                        >
+                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                    {/* Month Navigation */}
+                    {dateRange === 'month' && (
+                      <div className="flex items-center gap-2 border-l pl-3">
+                        <button
+                          onClick={handlePreviousMonth}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition"
+                          title="Previous Week"
+                        >
+                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={handleTodayMonth}
+                          className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                        >
+                          {dateRangeDisplay}
+                        </button>
+                        <button
+                          onClick={handleNextMonth}
                           disabled={currentWeekStart.isSameOrAfter(moment().startOf('week'))}
                           className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Next Week"

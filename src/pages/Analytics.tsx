@@ -199,8 +199,8 @@ const Analytics: React.FC = () => {
     startDate = currentWeekStart.clone();
     endDate = currentWeekStart.clone().endOf('week');
   } else if (dateRange === 'month') {
-    startDate = moment().startOf('month');
-    endDate = moment().endOf('month');
+    startDate = currentWeekStart.clone().startOf('month');
+    endDate = currentWeekStart.clone().endOf('month');
   }
 
   // Filter logs by date range
@@ -279,6 +279,18 @@ const Analytics: React.FC = () => {
     setCurrentWeekStart(moment().startOf('week'));
   };
 
+    const handlePreviousMonth = () => {
+    setCurrentWeekStart(currentWeekStart.clone().subtract(1,'month'));
+    }
+  
+    const handleNextMonth = () => {
+    setCurrentWeekStart(currentWeekStart.clone().add(1,'month'));
+    }
+    
+    const handleTodayMonth = () => {
+      setCurrentWeekStart(moment().startOf('month'))
+    }
+
   const handleDateRangeChange = (range: DateRangeType) => {
     setDateRange(range);
     if (range === 'week') {
@@ -287,8 +299,10 @@ const Analytics: React.FC = () => {
   };
 
   // Chart data - use filtered stats
-  const topPagesData = dateFilteredPageStats.slice(0, 10).map(page => ({
-    name: page.pagePath.length > 20 ? page.pagePath.substring(0, 20) + '...' : page.pagePath,
+  const topPagesData = dateFilteredPageStats.slice(0, 5).map(page => ({
+    name: page.pagePath.length > 10
+    ? ((page.pagePath.split("_").pop()) ?? page.pagePath) 
+    : page.pagePath,
     views: page.views,
     users: page.uniqueUsers
   }));
@@ -308,7 +322,7 @@ const Analytics: React.FC = () => {
   const dateRangeDisplay = dateRange === 'week'
     ? `${startDate?.format('MMM DD')} - ${endDate?.format('MMM DD, YYYY')}`
     : dateRange === 'month'
-    ? moment().format('MMMM YYYY')
+    ? currentWeekStart.format('MMMM YYYY')
     : 'All Time';
 
   // Debug information
@@ -383,7 +397,7 @@ const Analytics: React.FC = () => {
                     onClick={handleToday}
                     className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                   >
-                    This Week
+                    {dateRangeDisplay}
                   </button>
                   <button
                     onClick={handleNextWeek}
@@ -396,6 +410,36 @@ const Analytics: React.FC = () => {
                     </svg>
                   </button>
                 </div>
+              )}
+              {/* Month Navigation */}
+              {dateRange === 'month' && (
+                <div className="flex items-center gap-2 border-l pl-3">
+                  <button
+                      onClick={handlePreviousMonth}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition"
+                          title="Previous Week"
+                  >
+                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                  </button>
+                  <button
+                    onClick={handleTodayMonth}
+                      className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                    >
+                        {dateRangeDisplay}
+                    </button>
+                    <button
+                      onClick={handleNextMonth}
+                      disabled={currentWeekStart.isSameOrAfter(moment().startOf('week'))}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Next Week"
+                      >
+                        <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                    </button>
+                  </div>
               )}
             </div>
           </div>
@@ -471,7 +515,7 @@ const Analytics: React.FC = () => {
                 <BarChart data={topPagesData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" width={100} />
+                  <YAxis dataKey="name" type="category" width="auto" fontSize={14} />
                   <Tooltip />
                   <Legend />
                   <Bar dataKey="views" fill="#8b5cf6" name="Views" />
@@ -597,7 +641,6 @@ const Analytics: React.FC = () => {
                 >
                   <div
                     className="p-4 cursor-pointer hover:bg-gray-50 transition"
-                    onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -635,15 +678,6 @@ const Analytics: React.FC = () => {
                       </svg>
                     </div>
                   </div>
-
-                  {expandedLog === log.id && log.params && (
-                    <div className="border-t border-gray-200 bg-gray-50 p-4">
-                      <h4 className="font-semibold text-gray-700 mb-2">Event Parameters</h4>
-                      <pre className="bg-gray-800 text-gray-100 p-3 rounded text-xs overflow-x-auto">
-                        {JSON.stringify(log.params, null, 2)}
-                      </pre>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
