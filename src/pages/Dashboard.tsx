@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import axios from 'axios';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,  } from 'recharts';
 
 interface ApiCall {
   id: string;
@@ -54,133 +53,55 @@ const Dashboard: React.FC = () => {
 
   const fetchAnalyticsData = async () => {
     try {
-      console.log('=== FETCHING API ANALYTICS DATA ===');
-      console.log('Database:', db);
-      console.log('Project ID:', db.app.options.projectId);
+      // Request body matches the example you provided (empty filter)
+      const requestBody = {
+        api: {
+          ProjectName: "ApiLogs",
+          ModuleName: "Get_ApiLogs",
+          FunctionName: "GetAllApiLogs",
+        },
+        data: {
+          filter: {}
+        },
+      };
 
-      const apiRef = collection(db, 'Api');
-      console.log('Api collection reference:', apiRef);
-      console.log('Api collection path:', apiRef.path);
-
-      const apiSnapshot = await getDocs(apiRef);
-      console.log('Api snapshot:', apiSnapshot);
-      console.log('Api snapshot size:', apiSnapshot.size);
-      console.log('Api snapshot empty?:', apiSnapshot.empty);
-      console.log('Api snapshot docs:', apiSnapshot.docs);
-
-      console.log(`📊 Found ${apiSnapshot.size} users in Api collection`);
-
-      const allCalls: ApiCall[] = [];
-
-      // If empty, try the known user directly
-      if (apiSnapshot.empty || apiSnapshot.size === 0) {
-        console.warn('⚠️ Api collection appears empty. Trying direct access to known user...');
-
-        const testUserId = 'rahuldhakate2512@gmail.com';
-        console.log(`Attempting to fetch data for: ${testUserId}`);
-
-        try {
-          // Fetch failed API calls for known user
-          const failedRef = collection(db, 'Api', testUserId, 'failed');
-          console.log('Failed ref path:', failedRef.path);
-          const failedSnapshot = await getDocs(failedRef);
-          console.log('Failed snapshot size:', failedSnapshot.size);
-
-          failedSnapshot.forEach((doc) => {
-            const data = doc.data();
-            console.log('Failed doc:', doc.id, data);
-            allCalls.push({
-              id: doc.id,
-              url: data.url || data.response?.data?.url || 'Unknown',
-              status: data.response?.data?.status || data.status,
-              timestamp: data.timestamp || data.response?.data?.timestamp,
-              header: data.header,
-              response: data.response,
-              type: 'failed',
-              userId: testUserId
-            });
-          });
-
-          // Fetch success API calls for known user
-          const successRef = collection(db, 'Api', testUserId, 'success');
-          console.log('Success ref path:', successRef.path);
-          const successSnapshot = await getDocs(successRef);
-          console.log('Success snapshot size:', successSnapshot.size);
-
-          successSnapshot.forEach((doc) => {
-            const data = doc.data();
-            console.log('Success doc:', doc.id, data);
-            allCalls.push({
-              id: doc.id,
-              url: data.url || data.response?.data?.url || 'Unknown',
-              status: data.response?.data?.status || data.status,
-              timestamp: data.timestamp || data.response?.data?.timestamp,
-              header: data.header,
-              response: data.response,
-              type: 'success',
-              userId: testUserId
-            });
-          });
-
-          console.log(`  ✅ Success: ${allCalls.filter(c => c.type === 'success').length}, ❌ Failed: ${allCalls.filter(c => c.type === 'failed').length}`);
-        } catch (directError) {
-          console.error('Error with direct access:', directError);
+      const response = await axios.post(
+        "https://analyticsback.compliancesutra.com/api/execute",
+        requestBody,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InJhaHVsZGhha2F0ZTI1MTJAZ21haWwuY29tIiwicHJvamVjdCI6IkNvbXBsaWFuY2UiLCJtb2R1bGUiOiJSZXBvcnRzIiwiaWF0IjoxNzYyODQwMzkzLCJleHAiOjE3NjI5MjY3OTMsImlzcyI6ImNvbXBsaWFuY2UtYW5hbHl0aWNzLWJhY2tlbmQifQ.ro1CgeHxbb4eMnFGwe8EKJusmdDhmVhCCKE8KAZkVqc`
+          },
         }
-      } else {
-        // Process all users normally
-        for (const userDoc of apiSnapshot.docs) {
-          const userId = userDoc.id;
-          console.log(`👤 Processing user: ${userId}`);
+      );
 
-          // Fetch failed API calls
-          const failedRef = collection(db, 'Api', userId, 'failed');
-          const failedSnapshot = await getDocs(failedRef);
+      // API returns { data: [ ... ] } per your sample — handle that shape
+      const rows = response.data?.data ?? [];
 
-          console.log(`  Failed calls: ${failedSnapshot.size}`);
-          failedSnapshot.forEach((doc) => {
-            const data = doc.data();
-            console.log('  Failed doc:', doc.id, data);
-            allCalls.push({
-              id: doc.id,
-              url: data.url || data.response?.data?.url || 'Unknown',
-              status: data.response?.data?.status || data.status,
-              timestamp: data.timestamp || data.response?.data?.timestamp,
-              header: data.header,
-              response: data.response,
-              type: 'failed',
-              userId
-            });
-          });
-
-          // Fetch success API calls
-          const successRef = collection(db, 'Api', userId, 'success');
-          const successSnapshot = await getDocs(successRef);
-
-          console.log(`  Success calls: ${successSnapshot.size}`);
-          successSnapshot.forEach((doc) => {
-            const data = doc.data();
-            console.log('  Success doc:', doc.id, data);
-            allCalls.push({
-              id: doc.id,
-              url: data.url || data.response?.data?.url || 'Unknown',
-              status: data.response?.data?.status || data.status,
-              timestamp: data.timestamp || data.response?.data?.timestamp,
-              header: data.header,
-              response: data.response,
-              type: 'success',
-              userId
-            });
-          });
-
-          console.log(`  ✅ Success: ${allCalls.filter(c => c.userId === userId && c.type === 'success').length}, ❌ Failed: ${allCalls.filter(c => c.userId === userId && c.type === 'failed').length}`);
+      const safeParse = (val: any) => {
+        if (!val) return {};
+        if (typeof val === 'string') {
+          try { return JSON.parse(val); } catch { return val; }
         }
-      }
+        return val;
+      };
+
+      const allCalls: ApiCall[] = rows.map((item: any) => ({
+       id: item.ID ? String(item.ID) : item.id || Math.random().toString(36).slice(2),
+        url: (item.base_url ? item.base_url.replace(/\/$/, '') : '') + (item.endpoint || ''),
+        status: item.status_code ?? null,
+        timestamp: item.timestamp ?? new Date().toISOString(),
+        header: safeParse(item.headers),
+        response: safeParse(item.response_payload),
+        type: (item.api_status || '').toLowerCase() === 'success' ? 'success' : 'failed',
+        userId: item.user_email ??  'Unknown',
+      }));
 
       setAllApiCalls(allCalls);
-      console.log('✅ Total API calls loaded:', allCalls.length);
+      console.log("✅ Total API calls loaded:", allCalls.length);
     } catch (error) {
       console.error('❌ Error fetching analytics:', error);
-      console.error('Error details:', error);
     } finally {
       setLoading(false);
     }
@@ -677,7 +598,7 @@ const Dashboard: React.FC = () => {
                           <div>
                             <h4 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2h-2a2 2 0 01-2-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                               </svg>
                               Request Headers
                             </h4>

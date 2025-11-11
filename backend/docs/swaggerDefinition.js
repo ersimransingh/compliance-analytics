@@ -72,11 +72,11 @@ module.exports = {
               email: {
                 type: 'string',
                 format: 'email',
-                example: 'user@example.com',
+                example: 'rahuldhakate2512@gmail.com',
               },
               password: {
                 type: 'string',
-                example: 'P@ssw0rd',
+                example: 'Rahul',
               },
             },
           },

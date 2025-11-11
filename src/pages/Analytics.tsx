@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
-import { collection, getDocs, collectionGroup } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
+import axios from 'axios';
 
 interface ScreenLog {
   id: string;
@@ -39,7 +38,7 @@ const Analytics: React.FC = () => {
   const [userStats, setUserStats] = useState<UserStats[]>([]);
   const [selectedUser, setSelectedUser] = useState<string>('all');
   const [selectedPage, setSelectedPage] = useState<string>('all');
-  const [expandedLog, setExpandedLog] = useState<string | null>(null);
+  const [expandedLog,setExpandedLog] = useState<string | null>(null)
   const [dateRange, setDateRange] = useState<DateRangeType>('week');
   const [currentWeekStart, setCurrentWeekStart] = useState<moment.Moment>(moment().startOf('week'));
   const navigate = useNavigate();
@@ -51,53 +50,81 @@ const Analytics: React.FC = () => {
       return;
     }
     fetchAnalyticsData();
-  }, [navigate]);
+  }, [navigate, dateRange, currentWeekStart]);
 
+  
   const fetchAnalyticsData = async () => {
     try {
-      console.log('=== FETCHING ANALYTICS DATA ===');
-      console.log('Database:', db);
-      console.log('Project ID:', db.app.options.projectId);
+      setLoading(true);
+      console.log("Fetching analytics data for range:", dateRange);
 
-      const logs: ScreenLog[] = [];
+      // Calculate date range for API request
+      let fromDate = "";
+      let toDate = "";
 
-      // Use collectionGroup to query all "logs" subcollections across the entire database
-      console.log('🔍 Using collectionGroup to fetch all logs...');
-      const logsQuery = collectionGroup(db, 'logs');
-      const logsSnapshot = await getDocs(logsQuery);
+      if (dateRange === 'week') {
+        fromDate = currentWeekStart.format('YYYY-MM-DD');
+        toDate = currentWeekStart.clone().endOf('week').format('YYYY-MM-DD');
+      } else if (dateRange === 'month') {
+        fromDate = moment().startOf('month').format('YYYY-MM-DD');
+        toDate = moment().endOf('month').format('YYYY-MM-DD');
+      }
 
-      console.log(`📊 Found ${logsSnapshot.size} total logs using collectionGroup`);
+      console.log(`Fetching data from ${fromDate} to ${toDate}`);
 
-      logsSnapshot.forEach((logDoc) => {
-        const data = logDoc.data();
+      const requestBody = {
+        api: {
+          ProjectName: "ANALYTICS",
+          ModuleName: "GET_ANALYTICS",
+          FunctionName: "GetAllAnalytics",
+        },
+        data: {
+          filter: {
+            From_Date: fromDate,
+            To_Date: toDate,
+          },
+        },
+      };
 
-        // Extract user and page from the document path
-        // Path format: Analytics/{userId}/events/{pagePath}/logs/{logId}
-        const pathParts = logDoc.ref.path.split('/');
-        const userId = pathParts[1]; // After 'Analytics'
-        const pagePath = pathParts[3]; // After 'events'
 
-        console.log(`Log: ${logDoc.id} | User: ${userId} | Page: ${pagePath}`, data);
+      const response = await axios.post(
+        "https://analyticsback.compliancesutra.com/api/execute",
+        requestBody,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InJhaHVsZGhha2F0ZTI1MTJAZ21haWwuY29tIiwicHJvamVjdCI6IkNvbXBsaWFuY2UiLCJtb2R1bGUiOiJSZXBvcnRzIiwiaWF0IjoxNzYyODQwMzkzLCJleHAiOjE3NjI5MjY3OTMsImlzcyI6ImNvbXBsaWFuY2UtYW5hbHl0aWNzLWJhY2tlbmQifQ.ro1CgeHxbb4eMnFGwe8EKJusmdDhmVhCCKE8KAZkVqc`
+          },
+        }
+      );
 
-        logs.push({
-          id: logDoc.id,
-          name: data.name || 'screen_view',
-          screenName: data.params?.screenName || pagePath,
-          screenType: data.params?.Screen_Type || 'Screen',
-          timestamp: data.timestamp,
-          userId,
-          pagePath,
-          params: data.params
-        });
-      });
+      console.log("API Response:", response.data);
+      const resultData = response.data?.data || [];
 
-      console.log('✅ Total logs collected:', logs.length);
-      console.log('All logs:', logs);
+      const logs: ScreenLog[] = resultData.map((item: any) => ({
+        id: item.ID?.toString() || Math.random().toString(),
+        name: item.name || "",
+        screenName: item.Screen_Name || "Unknown Screen",
+        screenType: item.name || "Unknown Type",
+        timestamp: item.Timestamp || item.Created_At || moment().toISOString(),
+        userId: item.Email_ID || "",
+        pagePath: item.Screen_Path ,
+        params: item.Request_Body ? 
+          (typeof item.Request_Body === 'string' ? 
+            JSON.parse(item.Request_Body) : 
+            item.Request_Body) 
+          : {},
+      }));
+
       setAllLogs(logs);
       calculateStats(logs);
+      console.log(`Loaded ${logs.length} logs`);
     } catch (error) {
-      console.error('❌ Error fetching analytics:', error);
-      console.error('Error details:', error);
+      console.error('Error fetching analytics:', error);
+      // Add better error handling
+      if (axios.isAxiosError(error)) {
+        console.error('API Error:', error.response?.data);
+      }
     } finally {
       setLoading(false);
     }
@@ -252,6 +279,13 @@ const Analytics: React.FC = () => {
     setCurrentWeekStart(moment().startOf('week'));
   };
 
+  const handleDateRangeChange = (range: DateRangeType) => {
+    setDateRange(range);
+    if (range === 'week') {
+      setCurrentWeekStart(moment().startOf('week'));
+    }
+  };
+
   // Chart data - use filtered stats
   const topPagesData = dateFilteredPageStats.slice(0, 10).map(page => ({
     name: page.pagePath.length > 20 ? page.pagePath.substring(0, 20) + '...' : page.pagePath,
@@ -277,6 +311,16 @@ const Analytics: React.FC = () => {
     ? moment().format('MMMM YYYY')
     : 'All Time';
 
+  // Debug information
+  console.log('Debug Info:', {
+    totalLogs: allLogs.length,
+    dateRange,
+    currentWeekStart: currentWeekStart.format('YYYY-MM-DD'),
+    filteredLogsCount: filteredLogs?.length,
+    topPagesDataCount: topPagesData?.length,
+    userActivityDataCount: userActivityData?.length
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-screen-2xl">
@@ -292,7 +336,7 @@ const Analytics: React.FC = () => {
               {/* Date Range Buttons */}
               <div className="flex gap-2 bg-gray-100 rounded-lg p-1">
                 <button
-                  onClick={() => setDateRange('week')}
+                  onClick={() => handleDateRangeChange('week')}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition ${
                     dateRange === 'week'
                       ? 'bg-white text-indigo-600 shadow'
@@ -302,7 +346,7 @@ const Analytics: React.FC = () => {
                   Week
                 </button>
                 <button
-                  onClick={() => setDateRange('month')}
+                  onClick={() => handleDateRangeChange('month')}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition ${
                     dateRange === 'month'
                       ? 'bg-white text-indigo-600 shadow'
@@ -312,7 +356,7 @@ const Analytics: React.FC = () => {
                   Month
                 </button>
                 <button
-                  onClick={() => setDateRange('all')}
+                  onClick={() => handleDateRangeChange('all')}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition ${
                     dateRange === 'all'
                       ? 'bg-white text-indigo-600 shadow'
@@ -540,7 +584,7 @@ const Analytics: React.FC = () => {
           {filteredLogs.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <svg className="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
               <p className="text-lg font-medium">No activity logs found</p>
             </div>
