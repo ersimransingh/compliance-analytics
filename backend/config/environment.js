@@ -14,6 +14,7 @@ const requiredEnvVars = [
   'DB_PASSWORD',
   'JWT_SECRET',
   'UPSTREAM_LOGIN_URL',
+  'UPSTREAM_TOKEN_VERIFY_URL',
 ];
 
 const missingVars = requiredEnvVars.filter((variable) => !process.env[variable]);
@@ -43,5 +44,7 @@ module.exports = {
   },
   upstream: {
     loginUrl: process.env.UPSTREAM_LOGIN_URL,
+    verifyUrl: process.env.UPSTREAM_TOKEN_VERIFY_URL,
+    loginType: process.env.UPSTREAM_LOGIN_TYPE || 'AdminEmail',
   },
 };

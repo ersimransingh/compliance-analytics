@@ -1,4 +1,6 @@
-const { verifyToken } = require('../services/tokenService');
+const config = require('../config/environment');
+const { verifyUpstreamToken } = require('../services/upstreamAuthService');
+const { getTokenSession } = require('../services/sessionStore');
 
 const extractToken = (authorizationHeader) => {
   if (!authorizationHeader) {
@@ -13,18 +15,32 @@ const extractToken = (authorizationHeader) => {
   return parts[1];
 };
 
-const authenticate = (req, res, next) => {
+const resolveLoginContext = (req, token) => {
+  const session = getTokenSession(token);
+  const fallbackLoginId = req.headers['x-login-id'] || req.query.loginID || req.body?.loginID;
+  const fallbackLoginType = req.headers['x-login-type'] || config.upstream.loginType;
+
+  return {
+    loginId: session?.loginId || fallbackLoginId,
+    loginType: session?.loginType || fallbackLoginType,
+  };
+};
+
+const authenticate = async (req, res, next) => {
   const token = extractToken(req.headers.authorization);
   if (!token) {
     return res.status(401).json({ success: false, message: 'Authorization token missing.' });
   }
 
   try {
-    const decoded = verifyToken(token);
-    req.user = decoded;
+    const { loginId, loginType } = resolveLoginContext(req, token);
+    const verification = await verifyUpstreamToken({ token, loginId, loginType });
+    req.user = verification;
     return next();
   } catch (error) {
-    return res.status(401).json({ success: false, message: 'Invalid or expired authorization token.' });
+    const status = error.status || 401;
+    const message = status === 401 ? 'Invalid or expired authorization token.' : error.message;
+    return res.status(status).json({ success: false, message });
   }
 };
 
