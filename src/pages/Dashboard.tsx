@@ -24,7 +24,7 @@ interface UserAnalytics {
 }
 
 type TabType = 'all' | 'success' | 'failed';
-type DateRangeType = 'week' | 'month' | 'all';
+type DateRangeType = 'hour' |'day'|'week' | 'month' | 'all';
 
 const Dashboard: React.FC = () => {
   const [user, setUser] = useState<any>(null);
@@ -35,8 +35,11 @@ const Dashboard: React.FC = () => {
   const [expandedApi, setExpandedApi] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
-  const [dateRange, setDateRange] = useState<DateRangeType>('week');
+  const [dateRange, setDateRange] = useState<DateRangeType>('hour');
   const [currentWeekStart, setCurrentWeekStart] = useState<moment.Moment>(moment().startOf('week'));
+  const [currentDayStart, setCurrentDayStart] = useState<moment.Moment>(moment().startOf('day'));
+  const [currentHourStart, setCurrentHourStart] = useState<moment.Moment>(moment().startOf('hour'));
+
 
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
@@ -49,11 +52,11 @@ const Dashboard: React.FC = () => {
 
     setUser(JSON.parse(userData));
     fetchAnalyticsData();
-  }, [navigate]);
+  }, [navigate, dateRange, currentWeekStart, currentDayStart, currentHourStart]);
 
   const fetchAnalyticsData = async () => {
     try {
-      // Request body matches the example you provided (empty filter)
+
       const requestBody = {
         api: {
           ProjectName: "ApiLogs",
@@ -61,7 +64,7 @@ const Dashboard: React.FC = () => {
           FunctionName: "GetAllApiLogs",
         },
         data: {
-          filter: {}
+           filter: {},
         },
       };
 
@@ -71,7 +74,6 @@ const Dashboard: React.FC = () => {
         {
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InJhaHVsZGhha2F0ZTI1MTJAZ21haWwuY29tIiwicHJvamVjdCI6IkNvbXBsaWFuY2UiLCJtb2R1bGUiOiJSZXBvcnRzIiwiaWF0IjoxNzYyODQwMzkzLCJleHAiOjE3NjI5MjY3OTMsImlzcyI6ImNvbXBsaWFuY2UtYW5hbHl0aWNzLWJhY2tlbmQifQ.ro1CgeHxbb4eMnFGwe8EKJusmdDhmVhCCKE8KAZkVqc`
           },
         }
       );
@@ -91,7 +93,7 @@ const Dashboard: React.FC = () => {
        id: item.ID ? String(item.ID) : item.id || Math.random().toString(36).slice(2),
         url: (item.base_url ? item.base_url.replace(/\/$/, '') : '') + (item.endpoint || ''),
         status: item.status_code ?? null,
-        timestamp: item.timestamp ?? new Date().toISOString(),
+        timestamp: item.timestamp,
         header: safeParse(item.headers),
         response: safeParse(item.response_payload),
         type: (item.api_status || '').toLowerCase() === 'success' ? 'success' : 'failed',
@@ -107,6 +109,8 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -121,8 +125,14 @@ const Dashboard: React.FC = () => {
   // Calculate date range
   let startDate: moment.Moment | null = null;
   let endDate: moment.Moment | null = null;
-
-  if (dateRange === 'week') {
+  
+  if(dateRange === 'hour'){
+    startDate = currentHourStart.clone();
+    endDate = currentHourStart.clone().endOf('hour');
+  }else if(dateRange === 'day'){
+    startDate = currentDayStart.clone();
+    endDate = currentDayStart.clone().endOf('day');
+  }else if (dateRange === 'week') {
     startDate = currentWeekStart.clone();
     endDate = currentWeekStart.clone().endOf('week');
   } else if (dateRange === 'month') {
@@ -132,10 +142,13 @@ const Dashboard: React.FC = () => {
 
   // Filter by date range
   let filteredByDate = allApiCalls;
+
   if (startDate && endDate) {
     filteredByDate = allApiCalls.filter(call => {
-      const callDate = moment(call.timestamp);
-      return callDate.isBetween(startDate, endDate, 'day', '[]');
+      const callMoment = moment(call.timestamp, 'YYYY-MM-DD HH:mm:ss');
+      return callMoment.isBetween(startDate, endDate,undefined, '[]');
+
+      
     });
   }
 
@@ -219,6 +232,17 @@ const Dashboard: React.FC = () => {
   // Get unique users for filter dropdown
   const uniqueUsers = Array.from(new Set(dateFilteredAnalytics.map(u => u.userId)));
 
+  //Hour handlers
+  const handlePreviousHour = () => setCurrentHourStart(currentHourStart.clone().subtract(1,'hour'));
+  const handleNextHour = () => setCurrentHourStart(currentHourStart.clone().add(1,'hour'));
+  const handleTodayHour = () => setCurrentHourStart(moment().startOf('hour'));
+
+  //Day handlers
+  const handlePreviousDay = () => setCurrentDayStart(currentDayStart.clone().subtract(1,'day'));
+  const handleNextDay = () => setCurrentDayStart(currentDayStart.clone().add(1,'day'));
+  const handleTodayDay = () => setCurrentDayStart(moment().startOf('day'));
+
+  //Week handlers
   const handlePreviousWeek = () => {
     setCurrentWeekStart(currentWeekStart.clone().subtract(1, 'week'));
   };
@@ -230,7 +254,7 @@ const Dashboard: React.FC = () => {
   const handleToday = () => {
     setCurrentWeekStart(moment().startOf('week'));
   };
-
+ //month handlers
   const handlePreviousMonth = () => {
   setCurrentWeekStart(currentWeekStart.clone().subtract(1,'month'));
   }
@@ -244,8 +268,14 @@ const Dashboard: React.FC = () => {
   }
 
 
+
   // Date range display
-  const dateRangeDisplay = dateRange === 'week'
+  const dateRangeDisplay = 
+    dateRange === 'hour'
+    ? `${startDate?.format('MMM DD, YYYY, h A')} - ${endDate?.clone().add(1, 'hour').format('h A')}`
+    :dateRange === 'day'
+    ? startDate?.format('MMM DD, YYYY')
+    : dateRange === 'week'
     ? `${startDate?.format('MMM DD')} - ${endDate?.format('MMM DD, YYYY')}`
     : dateRange === 'month'
     ? currentWeekStart.format('MMMM YYYY')
@@ -264,6 +294,26 @@ const Dashboard: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-3">
                     {/* Date Range Buttons */}
                     <div className="flex gap-2 bg-gray-100 rounded-lg p-1">
+                    <button
+                        onClick={() => setDateRange('hour')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                          dateRange === 'hour'
+                            ? 'bg-white text-indigo-600 shadow'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                      >
+                        Hour
+                      </button>
+                      <button
+                        onClick={() => setDateRange('day')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                          dateRange === 'day'
+                            ? 'bg-white text-indigo-600 shadow'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                      >
+                        Day
+                      </button>
                       <button
                         onClick={() => setDateRange('week')}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition ${
@@ -296,6 +346,66 @@ const Dashboard: React.FC = () => {
                       </button>
                     </div>
       
+                    {/* Hour Navigation  */}
+                    {dateRange === 'hour' && (
+                      <div className="flex items-center gap-2 border-l pl-3">
+                        <button
+                          onClick={handlePreviousHour}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition"
+                          title="Previous Hour"
+                        >
+                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={handleTodayHour}
+                          className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                        >
+                          {dateRangeDisplay}
+                        </button>
+                        <button
+                          onClick={handleNextHour}
+                          disabled={currentHourStart.isSameOrAfter(moment().startOf('hour'))}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Next Hour"
+                        >
+                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                    {/* Day Navigation */}
+                    {dateRange === 'day' && (
+                      <div className="flex items-center gap-2 border-l pl-3">
+                        <button
+                          onClick={handlePreviousDay}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition"
+                          title="Previous Day"
+                        >
+                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={handleTodayDay}
+                          className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                        >
+                          {dateRangeDisplay}
+                        </button>
+                        <button
+                          onClick={handleNextDay}
+                          disabled={currentDayStart.isSameOrAfter(moment().startOf('day'))}
+                          className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Next Day"
+                        >
+                          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                     {/* Week Navigation  */}
                     {dateRange === 'week' && (
                       <div className="flex items-center gap-2 border-l pl-3">
@@ -607,7 +717,7 @@ const Dashboard: React.FC = () => {
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              {moment(apiCall.timestamp).format('MMM DD, YYYY HH:mm:ss')}
+                              {moment(apiCall.timestamp, 'YYYY-MM-DD HH:mm:ss').format('MMM DD, YYYY HH:mm:ss')}
                             </span>
                             {apiCall.status && (
                               <>

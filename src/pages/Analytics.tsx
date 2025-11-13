@@ -29,7 +29,7 @@ interface UserStats {
   lastActive: string;
 }
 
-type DateRangeType = 'week' | 'month' | 'all';
+type DateRangeType = 'hour' |'day' |'week' | 'month' | 'all';
 
 const Analytics: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -39,20 +39,21 @@ const Analytics: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<string>('all');
   const [selectedPage, setSelectedPage] = useState<string>('all');
   const [expandedLog,setExpandedLog] = useState<string | null>(null)
-  const [dateRange, setDateRange] = useState<DateRangeType>('week');
+  const [dateRange, setDateRange] = useState<DateRangeType>('hour');
   const [currentWeekStart, setCurrentWeekStart] = useState<moment.Moment>(moment().startOf('week'));
+  const [currentHourStart, setCurrentHourStart] = useState<moment.Moment>(moment().startOf('hour'));
+  const [currentDayStart, setCurrentDayStart] = useState<moment.Moment>(moment().startOf('day'));
   const navigate = useNavigate();
 
-  useEffect(() => {
+    useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     if (!isAuthenticated) {
       navigate('/login');
       return;
     }
     fetchAnalyticsData();
-  }, [navigate, dateRange, currentWeekStart]);
+  }, [navigate, dateRange, currentWeekStart, currentDayStart, currentHourStart]); 
 
-  
   const fetchAnalyticsData = async () => {
     try {
       setLoading(true);
@@ -93,7 +94,6 @@ const Analytics: React.FC = () => {
         {
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InJhaHVsZGhha2F0ZTI1MTJAZ21haWwuY29tIiwicHJvamVjdCI6IkNvbXBsaWFuY2UiLCJtb2R1bGUiOiJSZXBvcnRzIiwiaWF0IjoxNzYyODQwMzkzLCJleHAiOjE3NjI5MjY3OTMsImlzcyI6ImNvbXBsaWFuY2UtYW5hbHl0aWNzLWJhY2tlbmQifQ.ro1CgeHxbb4eMnFGwe8EKJusmdDhmVhCCKE8KAZkVqc`
           },
         }
       );
@@ -106,7 +106,7 @@ const Analytics: React.FC = () => {
         name: item.name || "",
         screenName: item.Screen_Name || "Unknown Screen",
         screenType: item.name || "Unknown Type",
-        timestamp: item.Timestamp || item.Created_At || moment().toISOString(),
+        timestamp: item.timestamp,
         userId: item.Email_ID || "",
         pagePath: item.Screen_Path ,
         params: item.Request_Body ? 
@@ -129,6 +129,8 @@ const Analytics: React.FC = () => {
       setLoading(false);
     }
   };
+
+
 
   const calculateStats = (logs: ScreenLog[]) => {
     // Calculate page stats
@@ -195,20 +197,26 @@ const Analytics: React.FC = () => {
   let startDate: moment.Moment | null = null;
   let endDate: moment.Moment | null = null;
 
-  if (dateRange === 'week') {
-    startDate = currentWeekStart.clone();
-    endDate = currentWeekStart.clone().endOf('week');
-  } else if (dateRange === 'month') {
-    startDate = currentWeekStart.clone().startOf('month');
-    endDate = currentWeekStart.clone().endOf('month');
-  }
+  if (dateRange === 'hour') {
+  startDate = currentHourStart.clone();
+  endDate = currentHourStart.clone().endOf('hour');
+} else if (dateRange === 'day') {
+  startDate = currentDayStart.clone();
+  endDate = currentDayStart.clone().endOf('day');
+} else if (dateRange === 'week') {
+  startDate = currentWeekStart.clone();
+  endDate = currentWeekStart.clone().endOf('week');
+} else if (dateRange === 'month') {
+  startDate = currentWeekStart.clone().startOf('month');
+  endDate = currentWeekStart.clone().endOf('month');
+}
 
   // Filter logs by date range
   let filteredByDate = allLogs;
   if (startDate && endDate) {
     filteredByDate = allLogs.filter(log => {
-      const logDate = moment(log.timestamp);
-      return logDate.isBetween(startDate, endDate, 'day', '[]');
+      const logDate = moment(log.timestamp,'YYYY-MM-DD HH:mm:ss');
+      return logDate.isBetween(startDate, endDate, undefined, '[]');
     });
   }
 
@@ -267,6 +275,17 @@ const Analytics: React.FC = () => {
     })).sort((a, b) => b.totalViews - a.totalViews);
   }
 
+  //Hour handlers
+  const handlePreviousHour = () => setCurrentHourStart(currentHourStart.clone().subtract(1, 'hour'));
+  const handleNextHour = () => setCurrentHourStart(currentHourStart.clone().add(1,'hour'));
+  const handleTodayHour = () => setCurrentHourStart(moment().startOf('hour'));
+
+  //Day handlers
+  const handlePreviousDay = () => setCurrentDayStart(currentDayStart.clone().subtract(1,'day'));
+  const handleNextDay = () => setCurrentDayStart(currentDayStart.clone().add(1,'day'));
+  const handleTodayDay = () => setCurrentDayStart(moment().startOf('day'));
+ 
+  //Week handlers
   const handlePreviousWeek = () => {
     setCurrentWeekStart(currentWeekStart.clone().subtract(1, 'week'));
   };
@@ -279,6 +298,7 @@ const Analytics: React.FC = () => {
     setCurrentWeekStart(moment().startOf('week'));
   };
 
+  //Month handlers
     const handlePreviousMonth = () => {
     setCurrentWeekStart(currentWeekStart.clone().subtract(1,'month'));
     }
@@ -293,8 +313,14 @@ const Analytics: React.FC = () => {
 
   const handleDateRangeChange = (range: DateRangeType) => {
     setDateRange(range);
-    if (range === 'week') {
+    if(range === 'hour') {
+      setCurrentHourStart(moment().startOf('hour'));
+    }else if (range === 'day') {
+      setCurrentDayStart(moment().startOf('day'));
+    }else if (range === 'week') {
       setCurrentWeekStart(moment().startOf('week'));
+    } else if (range === 'month') {
+      setCurrentWeekStart(moment().startOf('month'));
     }
   };
 
@@ -319,7 +345,12 @@ const Analytics: React.FC = () => {
   const avgViewsPerUser = totalUsers > 0 ? (totalViews / totalUsers).toFixed(1) : 0;
 
   // Date range display
-  const dateRangeDisplay = dateRange === 'week'
+  const dateRangeDisplay = 
+    dateRange === 'hour'
+    ? `${startDate?.format('MMM DD, YYYY, h A')} - ${endDate?.clone().add(1, 'hour').format('h A')}`
+    : dateRange === 'day'
+    ? startDate?.format('MMM DD, YYYY')
+    : dateRange === 'week'
     ? `${startDate?.format('MMM DD')} - ${endDate?.format('MMM DD, YYYY')}`
     : dateRange === 'month'
     ? currentWeekStart.format('MMMM YYYY')
@@ -349,6 +380,26 @@ const Analytics: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               {/* Date Range Buttons */}
               <div className="flex gap-2 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setDateRange('hour')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                  dateRange === 'hour'
+                  ? 'bg-white text-indigo-600 shadow'
+                  : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                  >
+                    Hour
+                </button>
+                <button
+                  onClick={() => setDateRange('day')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                  dateRange === 'day'
+                  ? 'bg-white text-indigo-600 shadow'
+                  : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                 >
+                   Day
+                </button>
                 <button
                   onClick={() => handleDateRangeChange('week')}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition ${
@@ -381,7 +432,67 @@ const Analytics: React.FC = () => {
                 </button>
               </div>
 
-              {/* Week Navigation (only show when week is selected) */}
+              {/* Hour Navigation  */}
+              {dateRange === 'hour' && (
+                <div className="flex items-center gap-2 border-l pl-3">
+                  <button
+                    onClick={handlePreviousHour}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition"
+                    title="Previous Hour"
+                  >
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleTodayHour}
+                    className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                  >
+                    {dateRangeDisplay}
+                  </button>
+                  <button
+                    onClick={handleNextHour}
+                    disabled={currentHourStart.isSameOrAfter(moment().startOf('hour'))}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Next Hour"
+                  >
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {/* Day Navigation  */}
+              {dateRange === 'day' && (
+                <div className="flex items-center gap-2 border-l pl-3">
+                  <button
+                    onClick={handlePreviousDay}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition"
+                    title="Previous Day"
+                  >
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleTodayDay}
+                    className="px-3 py-2 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                  >
+                    {dateRangeDisplay}
+                  </button>
+                  <button
+                    onClick={handleNextDay}
+                    disabled={currentDayStart.isSameOrAfter(moment().startOf('day'))}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Next Day"
+                  >
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+              {/* Week Navigation  */}
               {dateRange === 'week' && (
                 <div className="flex items-center gap-2 border-l pl-3">
                   <button
@@ -417,7 +528,7 @@ const Analytics: React.FC = () => {
                   <button
                       onClick={handlePreviousMonth}
                         className="p-2 hover:bg-gray-100 rounded-lg transition"
-                          title="Previous Week"
+                          title="Previous Month"
                   >
                   <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -431,9 +542,9 @@ const Analytics: React.FC = () => {
                     </button>
                     <button
                       onClick={handleNextMonth}
-                      disabled={currentWeekStart.isSameOrAfter(moment().startOf('week'))}
+                      disabled={currentWeekStart.isSameOrAfter(moment().startOf('month'))}
                       className="p-2 hover:bg-gray-100 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Next Week"
+                      title="Next Month"
                       >
                         <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -661,7 +772,7 @@ const Analytics: React.FC = () => {
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              {moment(log.timestamp).format('MMM DD, YYYY HH:mm:ss')}
+                              {moment(log.timestamp, 'YYYY-MM-DD HH:mm:ss').format('MMM DD, YYYY HH:mm:ss')}
                             </span>
                           </div>
                         </div>
