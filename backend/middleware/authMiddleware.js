@@ -29,7 +29,8 @@ const resolveLoginContext = (req, token) => {
 const authenticate = async (req, res, next) => {
   const token = extractToken(req.headers.authorization);
   if (!token) {
-    return res.status(401).json({ success: false, message: 'Authorization token missing.' });
+    req.user = null;
+    return next();
   }
 
   try {
