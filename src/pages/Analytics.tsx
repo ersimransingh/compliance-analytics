@@ -29,7 +29,7 @@ interface UserStats {
   lastActive: string;
 }
 
-type DateRangeType = 'hour' |'day' |'week' | 'month' | 'all';
+type DateRangeType = 'custom' | 'hour' |'day' |'week' | 'month' | 'all';
 
 const Analytics: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -43,6 +43,8 @@ const Analytics: React.FC = () => {
   const [currentWeekStart, setCurrentWeekStart] = useState<moment.Moment>(moment().startOf('week'));
   const [currentHourStart, setCurrentHourStart] = useState<moment.Moment>(moment().startOf('hour'));
   const [currentDayStart, setCurrentDayStart] = useState<moment.Moment>(moment().startOf('day'));
+  const [customFromDateTime, setCustomFromDateTime] = useState<string>('');
+  const [customToDateTime, setCustomToDateTime] = useState<string>('');
   const navigate = useNavigate();
 
     useEffect(() => {
@@ -63,7 +65,10 @@ const Analytics: React.FC = () => {
       let fromDate = "";
       let toDate = "";
 
-      if (dateRange === 'week') {
+      if(dateRange === 'custom') {
+        fromDate = customFromDateTime ? moment(customFromDateTime).format('YYYY-MM-DD HH:mm'):"";
+        toDate = customToDateTime ? moment(customToDateTime).format('YYYY-MM-DD HH:mm'):"";
+      }else if (dateRange === 'week') {
         fromDate = currentWeekStart.format('YYYY-MM-DD');
         toDate = currentWeekStart.clone().endOf('week').format('YYYY-MM-DD');
       } else if (dateRange === 'month') {
@@ -220,6 +225,17 @@ const Analytics: React.FC = () => {
     });
   }
 
+  // For Custom DateRange Calculation
+   if(dateRange === 'custom' && customFromDateTime && customToDateTime) {
+    const start = moment(customFromDateTime);
+    const end = moment(customToDateTime)
+
+    filteredByDate =allLogs.filter((log) => {
+      const logDate = moment(log.timestamp, 'YYYY-MM-DD HH:mm:ss');
+      return logDate.isBetween(start, end, undefined, '[]');
+    })
+  }
+
   // Recalculate stats for filtered date range
   const dateFilteredPageStats = calculatePageStatsFromLogs(filteredByDate);
   const dateFilteredUserStats = calculateUserStatsFromLogs(filteredByDate);
@@ -345,8 +361,12 @@ const Analytics: React.FC = () => {
   const avgViewsPerUser = totalUsers > 0 ? (totalViews / totalUsers).toFixed(1) : 0;
 
   // Date range display
-  const dateRangeDisplay = 
-    dateRange === 'hour'
+  const dateRangeDisplay =
+    dateRange === 'custom'
+    ? customFromDateTime && customToDateTime
+      ?`${moment(customFromDateTime).format('MMM DD, hh:mm A')} - ${moment(customToDateTime).format('MMM DD, hh:mm A')}`
+      : "select From & To Date & Time"
+    :dateRange === 'hour'
     ? `${startDate?.format('MMM DD, YYYY, h A')} - ${endDate?.clone().add(1, 'hour').format('h A')}`
     : dateRange === 'day'
     ? startDate?.format('MMM DD, YYYY')
@@ -380,6 +400,16 @@ const Analytics: React.FC = () => {
             <div className="flex flex-wrap items-center gap-3">
               {/* Date Range Buttons */}
               <div className="flex gap-2 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setDateRange('custom')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                  dateRange === 'custom'
+                  ? 'bg-white text-indigo-600 shadow'
+                  : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                  >
+                    Custom
+                </button>
                 <button
                   onClick={() => setDateRange('hour')}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition ${
@@ -431,7 +461,37 @@ const Analytics: React.FC = () => {
                   All Time
                 </button>
               </div>
+              
+              {/* Custom Navigation */}
+              {dateRange === 'custom' && (
+                <div className="flex items-center gap-4 border-l pl-4">
+                 {/* From Date-Time */}
+                 <div className='flex flex-col'>
+                  <label className='text-xs text-gray-600'>From</label>
+                  <input
+                    type='datetime-local'
+                    value={customFromDateTime}
+                    onChange={(e) => {setCustomFromDateTime(e.target.value)
+                      setDateRange('custom')
+                    }}
+                    className="px-3 py-2 border rounded-md"
+                  />
+                  </div>
 
+                  {/* To Date-Time */}
+                  <div className='flex flex-col'>
+                    <label className='text-xs text-gray-600'>To</label>
+                    <input
+                      type='datetime-local'
+                      value={customToDateTime}
+                      onChange={(e) => {setCustomToDateTime(e.target.value)
+                        setDateRange('custom')
+                      }}
+                      className='px-3 py-2 border rounded-md'
+                    />
+                  </div>
+                </div>
+              )}
               {/* Hour Navigation  */}
               {dateRange === 'hour' && (
                 <div className="flex items-center gap-2 border-l pl-3">
